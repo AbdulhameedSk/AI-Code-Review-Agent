@@ -75,6 +75,23 @@ WEBHOOK_SECRET=any-random-string   # must match the repo webhook config
 DRY_RUN=true                       # start true — drafts only, posts nothing
 ```
 
+### The only required change
+
+`.env`. Everything else works out of the box — `traces.db` and report
+artifacts self-create at runtime.
+
+### Things you'll likely want to change
+
+| What | Where | Why |
+| ---- | ----- | --- |
+| Model | `core.py` → `MODEL` | Swap to a cheaper/bigger Claude model |
+| Token pricing | `core.py` → `PRICE_IN/PRICE_OUT` | Keep cost tracing accurate if you change models |
+| Review strictness | `review_agent.py` → `REVIEW_PROMPT` | Tune what counts as a finding (the whole review personality is ~10 lines of text) |
+| Max context per file | `review_agent.py` → `get_diff` slice (`[:8000]`) | Raise for bigger files, lower to cut cost |
+| Loop cap | `review_agent.py` → `max_steps=20` | Safety valve on agent iterations |
+| Which severities post inline | `app.py` → `_format_comments` | Currently only `bug`/`security` go inline |
+| Go fully live | `.env` → `DRY_RUN=false` | Only after you're happy with dry-run output |
+
 ## How to run
 
 **Tests (no keys needed):**
@@ -114,15 +131,38 @@ curl http://localhost:8000/traces
 
 ## How to deploy
 
-Any host that runs Python. Start command:
+**Render (free tier, ~10 min):**
 
-```bash
-uvicorn app:app --host 0.0.0.0 --port $PORT
+1. Push this repo to GitHub.
+2. render.com → New → Web Service → connect the repo.
+3. Build command: `pip install -r requirements.txt`
+4. Start command: `uvicorn app:app --host 0.0.0.0 --port $PORT`
+5. Environment → add `ANTHROPIC_API_KEY`, `GITHUB_TOKEN`, `WEBHOOK_SECRET`, `DRY_RUN`.
+6. Copy the service URL → your repo's Settings → Webhooks → add it as
+   `<url>/webhook` (JSON, secret = `WEBHOOK_SECRET`, pull_request events).
+
+**Railway / Fly.io / any VPS** — same start command, env vars in the
+platform's secrets panel.
+
+**Docker:**
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-Set the three env vars in the host's secrets panel. For always-on reviews,
-deploy to Render/Railway/Fly and point the webhook at the public URL — no
-ngrok needed.
+```bash
+docker build -t sentinel .
+docker run -p 8000:8000 --env-file .env sentinel
+```
+
+One caveat on free tiers: `traces.db` is a local SQLite file — it resets on
+redeploy. For durable traces, mount a volume or swap `trace.py` to Postgres
+(same SQL, different driver).
 
 ## Extending
 
