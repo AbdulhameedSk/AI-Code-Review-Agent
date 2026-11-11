@@ -57,6 +57,7 @@ sequenceDiagram
 | `evals/fixtures.py` | Diffs with planted bugs (SQL injection, hardcoded secret) + a clean one |
 | `evals/run_evals.py` | Scoring harness — runs reviewer on fixtures, checks catches |
 | `tests/test_core.py` | Offline unit tests (diff splitting, HMAC, cost math) |
+| `docs/` | Per-file plain-English explainers — start at `docs/README.md` |
 
 ## Setup — what to change after cloning
 
